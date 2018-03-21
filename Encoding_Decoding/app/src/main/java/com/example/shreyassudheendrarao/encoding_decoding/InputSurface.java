@@ -36,7 +36,7 @@ class InputSurface {
     }
     /**
      * Prepares EGL.  We want a GLES 2.0 context and a surface that supports recording.
-     */
+    */
     private void eglSetup() {
         mEGLDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
         if (mEGLDisplay == EGL14.EGL_NO_DISPLAY) {

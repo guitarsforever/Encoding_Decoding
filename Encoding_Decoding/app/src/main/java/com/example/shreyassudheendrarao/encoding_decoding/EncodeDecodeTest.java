@@ -1,4 +1,7 @@
 package com.example.shreyassudheendrarao.encoding_decoding;
+        import android.content.Context;
+        import android.graphics.Bitmap;
+        import android.graphics.BitmapFactory;
         import android.media.MediaCodec;
         import android.media.MediaCodecInfo;
         import android.media.MediaCodecList;
@@ -6,10 +9,19 @@ package com.example.shreyassudheendrarao.encoding_decoding;
         import android.opengl.GLES20;
         import android.test.AndroidTestCase;
         import android.util.Log;
+
+        import java.io.ByteArrayOutputStream;
+        import java.io.File;
+        import java.io.FileInputStream;
+        import java.io.FileNotFoundException;
         import java.io.FileOutputStream;
         import java.io.IOException;
+        import java.io.OutputStreamWriter;
         import java.nio.ByteBuffer;
+        import java.util.ArrayList;
         import java.util.Arrays;
+        import java.util.List;
+
         import javax.microedition.khronos.opengles.GL10;
 /**
  * Generates a series of video frames, encodes them, decodes them, and tests for significant
@@ -26,14 +38,15 @@ package com.example.shreyassudheendrarao.encoding_decoding;
 public class EncodeDecodeTest extends AndroidTestCase {
     private static final String TAG = "EncodeDecodeTest";
     private static final boolean VERBOSE = true;           // lots of logging
-    private static final boolean DEBUG_SAVE_FILE = true;   // save copy of encoded movie
+    private static final boolean DEBUG_SAVE_FILE = false;   // save copy of encoded movie
     private static final String DEBUG_FILE_NAME_BASE = "/sdcard/test.";
+    private static final String FILE_NAME_BASE = "/sdcard/testfiles/";
     // parameters for the encoder
     private static final String MIME_TYPE = "video/avc";    // H.264 Advanced Video Coding
     private static final int FRAME_RATE = 15;               // 15fps
     private static final int IFRAME_INTERVAL = 10;          // 10 seconds between I-frames
     // movie length, in frames
-    private static final int NUM_FRAMES = 30;               // two seconds of video
+    private static final int NUM_FRAMES = 405;               // two seconds of video
     private static final int TEST_Y = 120;                  // YUV values for colored rect
     private static final int TEST_U = 160;
     private static final int TEST_V = 200;
@@ -80,13 +93,23 @@ public class EncodeDecodeTest extends AndroidTestCase {
      * the test.
      */
     public void testEncodeDecodeVideoFromBufferToSurfaceQCIF() throws Throwable {
-        setParameters(176, 144, 1000000);
+        setParameters(176, 144, 6000000);
         BufferToSurfaceWrapper.runTest(this);
     }
     public void testEncodeDecodeVideoFromBufferToSurfaceQVGA() throws Throwable {
         setParameters(320, 240, 2000000);
         BufferToSurfaceWrapper.runTest(this);
     }
+
+    public void testEncodeDecodeVideoFromBufferToSurface500() throws Throwable {
+        setParameters(500, 350, 3000000);
+        BufferToSurfaceWrapper.runTest(this);
+    }
+    public void testEncodeDecodeVideoFromBufferToSurface640() throws Throwable {
+        setParameters(640, 480, 3000000);
+        BufferToSurfaceWrapper.runTest(this);
+    }
+    // 500 and 350 4000000
     public void testEncodeDecodeVideoFromBufferToSurface720p() throws Throwable {
         setParameters(1280, 720, 6000000);
         BufferToSurfaceWrapper.runTest(this);
@@ -363,6 +386,12 @@ public class EncodeDecodeTest extends AndroidTestCase {
                 throw new RuntimeException("unknown format " + colorFormat);
         }
     }
+
+    public byte[] getBytesFromBitmap(Bitmap bitmap) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream);
+        return stream.toByteArray();
+    }
     /**
      * Does the actual work for encoding frames from buffers of byte[].
      */
@@ -375,6 +404,10 @@ public class EncodeDecodeTest extends AndroidTestCase {
         ByteBuffer[] decoderOutputBuffers = null;
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         MediaFormat decoderOutputFormat = null;
+        long tsLong = 0, tslongMid = 0, tsLongEnd = 0;
+        List<Long> encodedTime = new ArrayList<Long>();
+        List<Long> decodedTime = new ArrayList<Long>();
+        List<Integer> packetSize = new ArrayList<>();
         int generateIndex = 0;
         int checkIndex = 0;
         int badFrames = 0;
@@ -384,6 +417,7 @@ public class EncodeDecodeTest extends AndroidTestCase {
         // for Y, and (stride/2)*(sliceHeight/2) for each of the Cb and Cr channels.  Application
         // of algebra and assuming that stride==width and sliceHeight==height yields:
         byte[] frameData = new byte[mWidth * mHeight * 3 / 2];
+
         // Just out of curiosity.
         long rawSize = 0;
         long encodedSize = 0;
@@ -421,7 +455,7 @@ public class EncodeDecodeTest extends AndroidTestCase {
                 if (inputBufIndex >= 0) {
                     long ptsUsec = computePresentationTime(generateIndex);
                     if (generateIndex == NUM_FRAMES) {
-                        // Send an empty frame with the end-of-stream flag set.  If we set EOS
+                        // Send an exmpty frame with the end-of-stream flag set.  If we set EOS
                         // on a frame with data, that frame data will be ignored, and the
                         // output will be short one frame.
                         encoder.queueInputBuffer(inputBufIndex, 0, 0, ptsUsec,
@@ -429,14 +463,39 @@ public class EncodeDecodeTest extends AndroidTestCase {
                         inputDone = true;
                         if (VERBOSE) Log.d(TAG, "sent input EOS (with zero-length frame)");
                     } else {
-                        generateFrame(generateIndex, encoderColorFormat, frameData);
+                        //generateFrame(generateIndex, encoderColorFormat, frameData);
+                        //getting the image from sdcard and converting it to byte array
+                        int fileIndex = generateIndex+1;
+                        String filepath = FILE_NAME_BASE+"thumb000"+fileIndex+".jpg";
+                        if (fileIndex>99) {
+                            filepath = FILE_NAME_BASE+"thumb0"+fileIndex+".jpg";
+                        } else if (fileIndex>9) {
+                            filepath = FILE_NAME_BASE+"thumb00"+fileIndex+".jpg";
+                        }
+                        Log.v(TAG, filepath);
+                        File imagefile = new File(filepath);
+                        FileInputStream fis = null;
+                        try {
+                            fis = new FileInputStream(imagefile);
+                        } catch (FileNotFoundException e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                        Bitmap bm = BitmapFactory.decodeStream(fis);
+                        byte[] frame = getBytesFromBitmap(bm);
                         ByteBuffer inputBuf = encoderInputBuffers[inputBufIndex];
                         // the buffer should be sized to hold one full frame
-                        assertTrue(inputBuf.capacity() >= frameData.length);
+                        //assertTrue(inputBuf.capacity() >= frameData.length);
+                        assertTrue(inputBuf.capacity() >= frame.length);
                         inputBuf.clear();
-                        inputBuf.put(frameData);
-                        encoder.queueInputBuffer(inputBufIndex, 0, frameData.length, ptsUsec, 0);
-                        if (VERBOSE) Log.d(TAG, "submitted frame " + generateIndex + " to enc");
+                        //inputBuf.put(frameData);
+                        inputBuf.put(frame);
+                        //encoder.queueInputBuffer(inputBufIndex, 0, frameData.length, ptsUsec, 0);
+                        encoder.queueInputBuffer(inputBufIndex, 0, frame.length, ptsUsec, 0);
+                        tsLong = System.currentTimeMillis();
+                        if (VERBOSE) Log.d(TAG, "submitted frame " + generateIndex + " to enc at" +
+                                tsLong);
+                        inputDone = true;
                     }
                     generateIndex++;
                 } else {
@@ -470,6 +529,7 @@ public class EncodeDecodeTest extends AndroidTestCase {
                     if (encodedData == null) {
                         fail("encoderOutputBuffer " + encoderStatus + " was null");
                     }
+                    // add logs here to see what is received from the buffer
                     // It's usually necessary to adjust the ByteBuffer values to match BufferInfo.
                     encodedData.position(info.offset);
                     encodedData.limit(info.offset + info.size);
@@ -510,7 +570,12 @@ public class EncodeDecodeTest extends AndroidTestCase {
                         decoder.queueInputBuffer(inputBufIndex, 0, info.size,
                                 info.presentationTimeUs, info.flags);
                         encoderDone = (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
-                        if (VERBOSE) Log.d(TAG, "passed " + info.size + " bytes to decoder"
+                        tslongMid = System.currentTimeMillis();
+                        long encodingTime = tslongMid - tsLong;
+                        encodedTime.add(encodingTime);
+                        packetSize.add (info.size);
+                        if (VERBOSE) Log.d(TAG, "passed " + info.size + " bytes to decoder" +
+                                " Encoding time = " + encodingTime
                                 + (encoderDone ? " (EOS)" : ""));
                     }
                     encoder.releaseOutputBuffer(encoderStatus, false);
@@ -576,7 +641,12 @@ public class EncodeDecodeTest extends AndroidTestCase {
                         // need to wait for the onFrameAvailable callback to fire.
                         decoder.releaseOutputBuffer(decoderStatus, doRender);
                         if (doRender) {
+                            inputDone = false;
+                            tsLongEnd =System.currentTimeMillis();
+                            long diff = tsLongEnd- tslongMid;
+                            decodedTime.add(diff);
                             if (VERBOSE) Log.d(TAG, "awaiting frame " + checkIndex);
+                            Log.d(TAG," Decoding Time = " + diff + " For Frame number: " + checkIndex);
                             assertEquals("Wrong time stamp", computePresentationTime(checkIndex),
                                     info.presentationTimeUs);
                             outputSurface.awaitNewImage();
@@ -591,6 +661,34 @@ public class EncodeDecodeTest extends AndroidTestCase {
         }
         if (VERBOSE) Log.d(TAG, "decoded " + checkIndex + " frames at "
                 + mWidth + "x" + mHeight + ": raw=" + rawSize + ", enc=" + encodedSize);
+    try {
+        FileOutputStream Out = new FileOutputStream("/sdcard/"+"config.txt");
+        if (Out != null) {
+            for (long x : encodedTime) {
+                String temp = Long.toString(x)+System.lineSeparator();
+                Out.write(temp.getBytes());
+            }
+            String temp1 = System.lineSeparator()+System.lineSeparator();
+            Out.write(temp1.getBytes());
+            for (long x : decodedTime) {
+                String temp = Long.toString(x)+System.lineSeparator();
+                Out.write(temp.getBytes());
+            }
+            temp1 = System.lineSeparator()+System.lineSeparator();
+            Out.write(temp1.getBytes());
+            for (long x : packetSize) {
+                String temp = Long.toString(x)+System.lineSeparator();
+                Out.write(temp.getBytes());
+            }
+
+            Out.close();
+        } else {
+            Log.d("shreyas1", "else" );
+        }
+    } catch (IOException ioe) {
+            Log.w(TAG, "failed writing debug data to file");
+            throw new RuntimeException(ioe);
+        }
         if (outputStream != null) {
             try {
                 outputStream.close();
