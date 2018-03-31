@@ -16,6 +16,7 @@ package com.example.shreyassudheendrarao.encoding_decoding;
         import java.io.FileNotFoundException;
         import java.io.FileOutputStream;
         import java.io.IOException;
+        import java.io.OutputStream;
         import java.io.OutputStreamWriter;
         import java.nio.ByteBuffer;
         import java.util.ArrayList;
@@ -627,6 +628,21 @@ public class EncodeDecodeTest extends AndroidTestCase {
                         }
                         decoder.releaseOutputBuffer(decoderStatus, false /*render*/);
                     } else {
+                        try {
+                            ByteBuffer outputFrame = decoderOutputBuffers[decoderStatus];
+                            byte[] imageBytes = new byte[outputFrame.remaining()];
+                            outputFrame.get(imageBytes);
+                            final Bitmap image = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+                            String outputFileName = "img"+Integer.valueOf(generateIndex)+".jpg";
+                            Log.v(TAG, "output filename:" + outputFileName);
+                            OutputStream fOut = new FileOutputStream(FILE_NAME_BASE + "output/" + outputFileName);
+                            image.compress(Bitmap.CompressFormat.JPEG,
+                                    100, fOut);
+                            fOut.flush();
+                            fOut.close();
+                        }catch (Exception e) {
+                        }
+
                         if (VERBOSE) Log.d(TAG, "surface decoder given buffer " + decoderStatus +
                                 " (size=" + info.size + ")");
                         rawSize += info.size;
